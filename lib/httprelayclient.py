@@ -15,8 +15,7 @@
 #
 import logging
 import re
-import ssl
-from httplib import HTTPConnection, HTTPSConnection, ResponseNotReady
+import requests
 import base64
 
 class HTTPRelayClient:
@@ -28,34 +27,23 @@ class HTTPRelayClient:
         host = host[2:]
         self.path = '/' + path.split('/', 1)[1]
         self.body = body
-        if proto.lower() == 'https':
-            #Create unverified (insecure) context
-            try:
-                #uv_context = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
-                uv_context = ssl.create_default_context()
-                self.session = HTTPSConnection(host,context=uv_context)
-            except AttributeError:
-                #This does not exist on python < 2.7.11
-                self.session = HTTPSConnection(host)
-        else:
-            self.session = HTTPConnection(host)
+        self.session = requests.Session()
+        #self.session.proxies = {'http': 'http://127.0.0.1:8080'}
         self.lastresult = None
 
 	#-------------------------------------------------------------------------------
     def sendNegotiate(self,negotiateMessage):
 		#Check if server wants auth
 		if self.body is not None:
-			self.session.request('POST', self.path, self.body, {"Content-Type":"text/xml"})
+			res = self.session.post(self.target, self.body, headers={"Content-Type":"text/xml"})
 		else:
-			self.session.request('GET', self.path)
+			res = self.session.get(self.target)
 
-		res = self.session.getresponse()
-		res.read()
-		if res.status != 401:
-			logging.info('Status code returned: %d. Authentication does not seem required for URL' % res.status)
+		if res.status_code != 401:
+			logging.info('Status code returned: %d. Authentication does not seem required for URL' % res.status_code)
 		try:
-			if 'NTLM' not in res.getheader('WWW-Authenticate'):
-				logging.error('NTLM Auth not offered by URL, offered protocols: %s' % res.getheader('WWW-Authenticate'))
+			if 'NTLM' not in res.headers.get('WWW-Authenticate', ''):
+				logging.error('NTLM Auth not offered by URL, offered protocols: %s' % res.headers.get('WWW-Authenticate'))
 				return False
 		except KeyError:
 			logging.error('No authentication requested by the server for url %s' % self.target)
@@ -65,15 +53,13 @@ class HTTPRelayClient:
 		negotiate = base64.b64encode(negotiateMessage)
 		if self.body is not None:
 			headers = {'Authorization':'NTLM %s' % negotiate, "Content-Type":"text/xml"}
-			self.session.request('POST', self.path, self.body, headers=headers)
+			res = self.session.post(self.target, self.body, headers=headers)
 		else:
 			headers = {'Authorization':'NTLM %s' % negotiate}
-			self.session.request('GET', self.path, headers=headers)
+			res = self.session.get(self.target, headers=headers)
 
-		res = self.session.getresponse()
-		res.read()
 		try:
-			serverChallengeBase64 = re.search('NTLM ([a-zA-Z0-9+/]+={0,2})', res.getheader('WWW-Authenticate')).group(1)
+			serverChallengeBase64 = re.search('NTLM ([a-zA-Z0-9+/]+={0,2})', res.headers.get('WWW-Authenticate', '')).group(1)
 			serverChallenge = base64.b64decode(serverChallengeBase64)
 			return serverChallenge
 		except (IndexError, KeyError, AttributeError):
@@ -85,18 +71,17 @@ class HTTPRelayClient:
 		auth = base64.b64encode(authenticateMessageBlob)
 		if self.body is not None:
 			headers = {'Authorization':'NTLM %s' % auth, "Content-Type":"text/xml"}
-			self.session.request('POST', self.path, self.body, headers=headers)
+			res = self.session.post(self.target, self.body, headers=headers)
 		else:
 			headers = {'Authorization':'NTLM %s' % auth}
-			self.session.request('GET', self.path, headers=headers)
+			res = self.session.get(self.target, headers=headers)
 			
-		res = self.session.getresponse()
-		if res.status == 401:
+		if res.status_code == 401:
 			return False
 		else:
-			logging.info('HTTP server returned error code %d, treating as a succesful login' % res.status)
+			logging.info('HTTP server returned error code %d, treating as a succesful login' % res.status_code)
 			#Cache this
-			self.lastresult = res.read()
+			self.lastresult = res.text
 			return True
 
 	#-------------------------------------------------------------------------------

